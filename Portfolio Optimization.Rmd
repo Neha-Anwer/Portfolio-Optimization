@@ -1,0 +1,317 @@
+---
+title: "Portfolio Optimization"
+author: '*** Neha Anwer***'
+date: "SDGB 7844; Prof. Nagaraja; Fall 2017"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Question 1
+
+```{r}
+# Extract and clean dataset 
+#setwd("C:/Users/Neha32/Desktop/Stat Methods and Computation/Homework")
+data.x <- read.table("asset_data.txt", sep = ",", header = T, stringsAsFactors = F)
+data.x$date <- as.Date(data.x$date, format="%Y-%m-%d")
+
+# Remove rows with missing FED rate, 613 rows remaining 
+data.x <- subset(data.x, !is.na(fed.rate))
+min(data.x$date)
+max(data.x$date)
+
+plot(x = data.x$date, y = data.x$fed.rate, main = "Federal Interest Rate from 2003 - 2014", ylab = "Interest Rate", xlab = "Date", las = T, type = "l")
+```
+
+
+The earliest data in the data set is August 1st, 2003. The latest data is October 29, 2014. The plot shows that the interest rate was increasing starting from late 2004 until it hit its peak in 2006 and then it remained steady until it started to rapidly decline in late 2007. This makes intuitive and historical sense because the housing market began to crash in 2007 causing the Federal funds rate to decline rapidly and sent the U.S. economy into a recession.
+
+
+## Question 2
+
+```{r}
+# Create training and testing partition 
+# Create reference column with just years and add to data  
+temp <- substr(data.x$date, 1, 4)
+data.x <- cbind(data.x, temp)
+data.x$date <- as.Date(data.x$date, format="%Y-%m-%d")     #coerce to date again
+
+training <- subset(data.x, data.x$temp!="2014")
+testing <- subset(data.x, data.x$temp=="2014")
+
+
+
+```
+
+There are 43 observations in the testing data and 570 observatins in the training data. 
+
+
+## Question 3
+
+```{r}
+# Convert percentage to decimal 
+testing$fed.rate <- testing$fed.rate/100
+training$fed.rate <- training$fed.rate/100
+
+# Calculate total returns using for loop 
+# Create empty vector rt
+rt.sp = NULL
+rt.bond = NULL
+for (i in 1:nrow(data.x)){                      #Begin for loop 
+
+  
+   rt.sp[i] = (data.x$close.spy[i]-  data.x$close.spy[i-1])/data.x$close.spy[i-1]
+   rt.bond[i] = (data.x$close.tlt[i]-  data.x$close.tlt[i-1])/data.x$close.tlt[i-1]
+ 
+
+  }                                           #End for loop 
+
+
+data.x <- cbind(data.x, data.frame(rt.sp, rt.bond))
+#reorder all dataset columns so temp is column 1
+data.x <- data.x[, c(5,1,2,3,4,6,7)]
+training <- training[, c(5,1,2,3,4)]
+testing <- testing[, c(5,1,2,3,4)]
+
+#Training data set
+#Using which function we know that first 570 rows are not 2014
+which(data.x$temp == 2014)
+ training <- data.frame(training, data.x$rt.sp[1:570],data.x$rt.bond[1:570])
+ colnames(training)[6] <-"SP Return"
+ colnames(training)[7] <-"Treasury Return"
+ 
+#Testing Data Set, original data set has 613 rows
+ testing <- data.frame(testing, data.x$rt.sp[571:613],data.x$rt.bond[571:613])
+ colnames(testing)[6] <-"SP Return"
+ colnames(testing)[7] <-"Treasury Return"
+ 
+################################## Plot returns ################################
+plot(training$date, training$`SP Return`, ylim = range(-0.16,0.1), pch = 1, las = T, 
+     type = "l", main = "SP Return 2003 - 2013", xlab = "Year", ylab = "Retrun")
+abline(h = 0, col = "darkblue", lty =3)
+
+plot(training$date, training$`Treasury Return`, ylim = range(-0.16,0.1), pch = 1, las = T, 
+     type = "l", main = "Treasury Bond Return 2003 - 2013", xlab = "Year", ylab = "Retrun") 
+abline(h = 0, col = "darkblue", lty =3)
+
+```
+
+Both graphs are very similar and hit their lowest points in 2009. The lowest return for the Treasury ETF is around -0.07 where as the lowest return for the S&P is much lower at around -0.15. 
+
+## Question 4
+
+```{r}
+#Construct normal quantile plots
+qqnorm(training$`SP Return`, main = "Normal Q-Q Plot: S&P")
+qqline(training$`SP Return`)
+qqnorm(training$`Treasury Return`, main = "Normal Q-Q Plot: U.S. Treasury")
+qqline(training$`Treasury Return`)
+```
+The U.S. Treasury returns approximately follow the theoretical normal distribution line on the qq-plot. It is safe to say that the U.S. Treasury returns are normally distributed because the points are very close to the qq-line. The S&P returns seem to be slightly heavy tailed because they fall along a line in the middle of the graph but curve off towards the ends, especially to the left end. However, the qq-plot does not stray extremely from qq-line so it is safe to say that the returns approximately follow a normal distribution. Therefore, the normal distribution assumption is satisfied. 
+
+## Question 5
+
+
+```{r}
+# Compute Correlation
+cor(training$`Treasury Return`[2:570], training$`SP Return`[2:570])
+
+########################## Rolling Window Corrlation ###########################
+
+##Create empty vector of length n to store corrlations
+
+n <- nrow(training)-23   #(24-1)
+rolling <- NULL                          
+x <- c(training$`SP Return`)
+y <- c(training$`Treasury Return`)
+
+for (i in 2:n) {            #Begin for loop
+  
+  
+  rolling[i] <- c(cor(x[i:(i+23)],y[i:(i+23)]))
+  
+
+
+  } #End for loop
+
+#Find last date of each window and store in a vector 
+rolling.date <- training$date[24:length(training$date)]        
+
+#plot
+plot(x = rolling.date,rolling, main = "Rolling Window Correlation", xlab = "Time", las = T, type = "l", col="Red") 
+abline(h=0, col = "gray", lty = 3)
+ 
+ 
+```
+
+
+The indexes have a weak negative correlation of -0.34. The rolling window correlation is a better measure of the relationship between the two assets because it shows how dynamic the relationship is. The rolling window fluctuates throughout the period and is even positive at certain points throughout the period. Simply inferring that the two assets are negatively correlated ignores the weeks that both had positive correlations and can lead to misguided investment decisions.
+
+
+## Question 6
+
+```{r}
+### Compute Sharpe ratio #####
+Sharpe <- function(fed = training$fed.rate,rt) { #Set Default inputs to training set
+  
+  ##Step 1: Compute excess returns 
+  et <- NULL
+  
+    for (i in 2:length(rt)){  #Begin for loop
+    
+      et[i] <- rt[i] - ((fed[i-1])/52)   
+    
+  }#End for loop
+  
+  ##Step 2: Calculate g
+  
+  g <- NULL 
+  g[1] <- 100
+
+  for (i in 2:(length(rt))){   #Begin for loop to calculate g
+    
+    g[i] <- g[i-1]*(1+(et[i]))
+    
+  }  #End for loop
+  
+  ##Step 3: Compute n 
+  n <- (length(rt) -1)/52
+  
+  ##Step 4: Compute CAGR 
+  CAGR <- ((g[length(g)]/g[1]) ^ (1/n)) - 1
+ 
+  ##Step 5: Compute v
+  v<- sqrt(52)*sd(et[2:(length(et))])
+  
+  ##Step 6: Compute Sharpe Ratio
+  SR <- CAGR/v 
+  
+  return(SR)
+  
+} #End Function
+
+Sharpe(rt = training$`SP Return`)
+Sharpe(rt = training$`Treasury Return`)
+
+```
+
+The S&P is a better investment because it has a positive Sharpe Ratio of 0.28. The positive Sharpe ratio indicates that the investment is less risky than the U.S. Treasury bond index which produces a negative Sharpe ratio. 
+
+## Question 7
+
+```{r}
+rm(x)
+##Weight calculation function 
+wt <- function(x, a = training$`SP Return`, b = training$`Treasury Return` )  { #Begin Function
+  
+  port.rt <- NULL
+  sr <- NULL
+  
+  for (j in 1:length(x)){ #Begin for loop 
+    
+      for (i in 1:length(a)){                      #Begin for loop
+    
+          port.rt[i] <- (x[j]*a[i]) + (1-x[j])*b[i]
+    
+      } #End for loop
+  
+     sr[j] <- Sharpe(rt = port.rt)
+  
+   } #End for loop
+  
+  return(sr)
+  
+}# End Function
+
+
+##Curve 
+curve(wt(x), from = 0, to =1, ylab = "Sharpe Ratio", xlab= "Portfolio weight", main ="Weighted Portfolio Sharpe Ratios")
+#abline(v = 0.56, lty = 3, col = "darkblue")
+```
+
+The maximum occurs when x is set to approximately 0.6. At this point, 60% of funds are invested in the S&P and 40% are invested in the treasury bonds.
+
+## Question 8
+
+```{r}
+
+#Find Optimum portfolio weights
+optimize(wt, maximum = TRUE, lower = 0, upper = 1)
+```
+
+Using the optimize function, the optimum value for x = 0.59. 59% of the funds should be allocated to equity(S&P 500) and 41% of funds should be allocated to the fixed income market(U.S. Treasury bonds). These portfolio weights yeild a Sharpe ratio of 0.36 which is the highest possible Sharpe ratio for these returns because it occurs when the function is maximized. It is better to invest in both the S&P and Treasury bonds because doing so yeilds a higher sharpe ratio than the Sharpe ratios of these assets individually. The overall sharpe ratio for just the S&P is 0.28 while the overall sharpe ratio for just U.S. treasury bonds is -0.01. When combined, the portfolio produces a better ratio. 
+
+
+
+## Question 9
+
+```{r}
+############################## Compute Excess Returns #######################################
+
+## Part 1: Compute Excess Returns for individual asset
+excess <- function(rt, fed= testing$fed.rate){ #Begin Function
+  
+ et <- NULL
+ g <- NULL 
+ g[1] <- 100
+
+  for (i in 1:length(rt)){    #Begin for loop to calculate daily excess returns
+    
+      et[i] <- rt[i] - ((fed[i-1])/52)  
+  
+  }#End for loop
+ 
+ for (i in 2:(length(rt))){   #Begin for loop to calculate g, excess returns index
+   
+       g[i] <- g[i-1]*(1+(et[i]))
+    
+  }  #End for loop
+ 
+ return(g)
+} 
+
+SP <- excess(rt = testing$`SP Return`)
+Bond <- excess(rt = testing$`Treasury Return`)
+
+##Part 2: Compute Excess returns for the combined portfolio using optimal x = 0.59
+
+comb.rt <- NULL                                         #Calculate weighted returns
+x <- 0.59
+
+for (i in 1:length(testing$`SP Return`)){              #Begin for loop
+    
+          comb.rt[i] <- (x*testing$`SP Return`[i]) + (1-x)*testing$`Treasury Return`[i]
+    
+      } #End for loop
+
+port <- excess(rt = comb.rt)                         #Calculate Excess Returns
+
+rm(x)
+
+##Part 3: Time-series Plot 
+df <- data.frame(SP, Bond, port)             
+
+plot(testing$date, df[,1], type = "l", pch = 1, col = 1,
+        ylab =  "Excess Returns", xlab = "Date", main = "Asset Excess Returns", ylim = range(min(df):max(df)))
+lines(x = testing$date, y = df[,2], col = 2)
+lines(x = testing$date, y = df[,3], col = 3)
+abline(h = 100, lty =3, col = "gray")
+legend("topleft", colnames(df[1:3]), col = 1:3, cex = 0.8, fill = 1:3, bty = "n")
+
+```
+Overall, there is an upward trend in all three of the portfolios over this time period. This seems to be in line with financial theory and the economic conditions of the time period. The Combined portfolio displayed in green is the least volatile of all three investments and only dips below a 100 dolars in excess returns once. The S&P index displayed in black earns the lowest excess returns overall and appears to be more volatile than the combined portfolio. Lastly, the U.S. Treasury bond index displayed in red generally performs better than both assets and exhibits the highest returns at the end of the period however it still appears to have been more volatile than the combined portfolio throughout the time period. 
+
+
+
+## Question 10
+
+```{r}
+#Calculate returns on a $100 investment
+SP[length(SP)]
+Bond[length(Bond)]
+port[length(port)]
+```
+
+The S&P only portfolio earned 107.88, the U.S. treasury bond only portfolio earned 116.38 dolars and the combined portfolio earned $111.69. The treasury only portfolio has the highest return. In the test set, the weighted portfolio did not perform as well as the treasury portfolio. However, it outperformed the S&P Portfolio by about 3 dolars. It makes intuitive sense that the combined porfolio return values are in between the returns of the individual assets because the S&P portfolio performed a lot worse than the the U.S. Treasury bonds portfolio. The combined portfolio mitigated the extreme fluctuations of both assets however it was not the best performer in the test set. 
